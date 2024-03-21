@@ -53,6 +53,8 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
         return util(agt2,x)
     end
 
+    gains=util1.(agt1.alloc.+deltaVec)
+
 
 end
 
