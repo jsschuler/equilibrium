@@ -39,8 +39,19 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # make a blank vector
     deltaVec=repeat([0.0,goodNum])
     # now, simulate the possible trades
-    r1=rand(U,1000)
-    r2=rand(U,1000)
+    r1=rand(U,10000)*agt1.alloc[agtOffer1]
+    r2=rand(U,10000)*agt2.alloc[agtOffer2]
+    deltaVec[agtOffer1]=-r1
+    deltaVec[agtOffer2]=r2
+
+    # now find the gains from trade
+    function util1(x::Array{Float64})
+        return util(agt1,x)
+    end
+
+    function util2(x::Array{Float64})
+        return util(agt2,x)
+    end
 
 
 end
