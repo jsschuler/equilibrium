@@ -1,5 +1,6 @@
 using Random
 using Distributions
+using Statistics
 U=Uniform()
 # basic equilibrium test
 
@@ -8,17 +9,33 @@ goodNum::Int64=2
 mutable struct agent
     utilAlpha::Array{Float64}
     alloc::Array{Float64}
-    priceHistory::Array{Float64}
+    priceHistory::Dict{Tuple{Int64,Int64}}{Array{Float64}}
     betaParam::Float64
     utilHistory::Array{Float64}
 end
 
-a1=agent(Float64[.7,.3],Float64[10.0,100.0],Float64[],.5,Float64[])
-a2=agent(Float64[.3,.7],Float64[100.0,10.0],.5,Float64[],Float64[])
-a3=agent(Float64[.2,.8],Float64[50.0,30.0],.5,Float64[],Float64[])
+agtList::Array{agent}=agent[]
+
+function agtGen(alpha::Array{Float64},alloc::Array{Float64})
+    global goodNum
+    keyVec=[]
+    for i in 1:goodNum
+        for j in 1:i
+            push!(keyvec,(i,j))
+        end
+    end
+    priceDict=Dict{Tuple{Int64.Int64},Array{Float64}}()
+    agt=agent(alpha,alloc,priceDict,.5,Float64[])
+    return agt
+end
+
+
+agt1=agent(Float64[.7,.3],Float64[10.0,100.0],Float64[],.5,Float64[])
+agt2=agent(Float64[.3,.7],Float64[100.0,10.0],Float64[],.5,Float64[])
+agt3=agent(Float64[.2,.8],Float64[50.0,30.0],Float64[],.5,Float64[])
 
 function util(agt::agent,x::Array{Float64})
-    return x.^agt.utilAlpha
+    return sum(x.^agt.utilAlpha)
 end
 
 function tradeGen(agt1::agent,agt2::agent)
@@ -29,6 +46,12 @@ function tradeGen(agt1::agent,agt2::agent)
     return (offerType,(offer1,offer2))
 end
 
+# can we broadcast with single agents if we define length function for agents?
+
+function length(agt::agent)
+    return 10000
+end
+
 # we need the function where by agents evaluate their potential gains from trade
 
 function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
@@ -37,23 +60,33 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # agt 2 trades which good?
     agtOffer2=tradePair[2]
     # make a blank vector
-    deltaVec=repeat([0.0,goodNum])
+    global goodNum
+    deltaVec=zeros(10000,goodNum)
     # now, simulate the possible trades
-    r1=rand(U,10000)*agt1.alloc[agtOffer1]
-    r2=rand(U,10000)*agt2.alloc[agtOffer2]
-    deltaVec[agtOffer1]=-r1
-    deltaVec[agtOffer2]=r2
+    deltaVec[:,agtOffer1]=rand(U,10000).*agt1.alloc[agtOffer1]
+    deltaVec[:,agtOffer2]=-rand(U,10000)*agt2.alloc[agtOffer2]
 
     # now find the gains from trade
-    function util1(x::Array{Float64})
-        return util(agt1,x)
-    end
+    uVec =[]
+    push!(uVec,(x) -> util(agt1,x))
+    push!(uVec,(x) -> util(agt2,x))
+    
+    gains1=mapslices(uVec[1],transpose(agt1.alloc).+deltaVec,dims=2)
+    gains2=mapslices(uVec[2],transpose(agt2.alloc).-deltaVec,dims=2)
 
-    function util2(x::Array{Float64})
-        return util(agt2,x)
-    end
+    # now, what utility does the agent currently have?
+    currUtil1=util(agt1,agt1.alloc)
+    currUtil2=util(agt2,agt2.alloc)
 
-    gains=util1.(agt1.alloc.+deltaVec)
+    better1= gains1 .> currUtil1
+    better2=gains2 .> currUtil2
+
+    gainsFromTrade=(better1 .&& better2)[:,1]
+    # now, subset to gains from trade
+    goodTrades=deltaVec[gainsFromTrade,:]
+    prices=abs.(goodTrades[:,1]./goodTrades[:,2])
+    # now, if the agent has no price history, the agent initializes by taking the geometric mean of the 
+    # gainful trades. 
 
 
 end
