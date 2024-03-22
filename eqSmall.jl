@@ -20,19 +20,26 @@ function agtGen(alpha::Array{Float64},alloc::Array{Float64})
     global goodNum
     keyVec=[]
     for i in 1:goodNum
-        for j in 1:i
-            push!(keyvec,(i,j))
+        for j in i:goodNum
+            push!(keyVec,(i,j))
         end
     end
-    priceDict=Dict{Tuple{Int64.Int64},Array{Float64}}()
+    
+        
+    priceDict=Dict{Tuple{Int64,Int64},Array{Float64}}()
+    for ky in keyVec
+        priceDict[ky]=Float64[]
+    end
     agt=agent(alpha,alloc,priceDict,.5,Float64[])
     return agt
 end
 
 
-agt1=agent(Float64[.7,.3],Float64[10.0,100.0],Float64[],.5,Float64[])
-agt2=agent(Float64[.3,.7],Float64[100.0,10.0],Float64[],.5,Float64[])
-agt3=agent(Float64[.2,.8],Float64[50.0,30.0],Float64[],.5,Float64[])
+
+agt1=agtGen(Float64[.3,.7],Float64[100.0,10.0])
+agt2=agtGen(Float64[.7,.3],Float64[10.0,100.0])
+agt3=agtGen(Float64[.2,.8],Float64[50.0,30.0])
+agt4=agtGen(Float64[.8,.2],Float64[50.0,130.0])
 
 function util(agt::agent,x::Array{Float64})
     return sum(x.^agt.utilAlpha)
@@ -46,11 +53,12 @@ function tradeGen(agt1::agent,agt2::agent)
     return (offerType,(offer1,offer2))
 end
 
-# can we broadcast with single agents if we define length function for agents?
-
-function length(agt::agent)
-    return 10000
+function geometric_mean(x::Vector{Float64})
+    n = length(x)
+    product = prod(x)
+    return product ^ (1 / n)
 end
+
 
 # we need the function where by agents evaluate their potential gains from trade
 
@@ -60,20 +68,23 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # agt 2 trades which good?
     agtOffer2=tradePair[2]
     # make a blank vector
+    tradeTuple=(agtOffer1,agtOffer2)
     global goodNum
     deltaVec=zeros(10000,goodNum)
     # now, simulate the possible trades
-    deltaVec[:,agtOffer1]=rand(U,10000).*agt1.alloc[agtOffer1]
-    deltaVec[:,agtOffer2]=-rand(U,10000)*agt2.alloc[agtOffer2]
+    deltaVec[:,agtOffer1]=-rand(U,10000).*agt1.alloc[agtOffer1]
+    deltaVec[:,agtOffer2]=+rand(U,10000)*agt2.alloc[agtOffer2]
 
     # now find the gains from trade
     uVec =[]
     push!(uVec,(x) -> util(agt1,x))
     push!(uVec,(x) -> util(agt2,x))
-    
+    # note, agent one gets what's in the left column and gives what is in the right
+    # this means that agt one prefers lower prices
+    # and agent two prefers higher
     gains1=mapslices(uVec[1],transpose(agt1.alloc).+deltaVec,dims=2)
     gains2=mapslices(uVec[2],transpose(agt2.alloc).-deltaVec,dims=2)
-
+    
     # now, what utility does the agent currently have?
     currUtil1=util(agt1,agt1.alloc)
     currUtil2=util(agt2,agt2.alloc)
@@ -87,7 +98,65 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     prices=abs.(goodTrades[:,1]./goodTrades[:,2])
     # now, if the agent has no price history, the agent initializes by taking the geometric mean of the 
     # gainful trades. 
+    if length(agt1.priceHistory[tradeTuple])==0
+        push!(agt1.priceHistory[tradeTuple],geometric_mean(prices))
+    end
 
+    if length(agt2.priceHistory[tradeTuple])==0
+        push!(agt2.priceHistory[tradeTuple],geometric_mean(prices))
+    end
+
+    #(mxPrice-offerPrice)/(mxPrice-fairPrice)
+    function acceptFunc1(offerPrice)
+        # now take the geometric mean of all observed trade prices. We call this the "fair price"
+        fairPrice=geometric_mean(agt1.priceHistory[tradeTuple])
+        # now build agent one probability 
+        # the agent will accept any beneficial trade at or above what it perceives as the equilibrium price
+        mnPrice=minimum(prices) 
+        mxPrice=maximum(prices)
+        
+        # reminder, agt 1 will accept trade with probability 1 at or below the perceived equilibrium price
+        if offerPrice <= fairPrice
+            return true
+        else
+            # get probability threshold for current price
+            threshold=(mxPrice-offerPrice)/(mxPrice-fairPrice)
+            Beta1=Beta(1+agt1.betaParam,1)
+            pThres=quantile(Beta1,threshold)
+            if rand(U,1)[1] >= pThres
+                return true
+            else
+                return false
+            end
+        end
+    end
+
+    function acceptFunc2(offerPrice)
+        # now take the geometric mean of all observed trade prices. We call this the "fair price"
+        fairPrice=geometric_mean(agt2.priceHistory[tradeTuple])
+        # now build agent one probability 
+        # the agent will accept any beneficial trade at or above what it perceives as the equilibrium price
+        mnPrice=minimum(prices) 
+        mxPrice=maximum(prices)
+        
+        # reminder, agt 2 will accept trade with probability 1 at or above the perceived equilibrium price
+        tradeBool::Bool=false
+        if offerPrice <= fairPrice
+            return true
+        else
+            # get probability threshold for current price
+            threshold=(offerPrice-mnPrice)/(mxPrice-mnPrice)
+            Beta1=Beta(1+agt1.betaParam,1)
+            pThres=quantile(Beta1,threshold)
+            if rand(U,1)[1] >= pThres
+                return true
+            else
+                return false
+            end
+        end
+    end
+    # now, find a trade
+    pIndex=sample(1:length(prices),length(prices),replace=false)
 
 end
 
