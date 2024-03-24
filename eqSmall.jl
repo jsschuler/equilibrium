@@ -31,6 +31,8 @@ function agtGen(alpha::Array{Float64},alloc::Array{Float64})
         priceDict[ky]=Float64[]
     end
     agt=agent(alpha,alloc,priceDict,.5,Float64[])
+    global agtList
+    push!(agtList,agt)
     return agt
 end
 
@@ -73,7 +75,9 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     deltaVec=zeros(10000,goodNum)
     # now, simulate the possible trades
     deltaVec[:,agtOffer1]=-rand(U,10000).*agt1.alloc[agtOffer1]
-    deltaVec[:,agtOffer2]=+rand(U,10000)*agt2.alloc[agtOffer2]
+    deltaVec[:,agtOffer2]=+rand(U,10000).*agt2.alloc[agtOffer2]
+    println("Delta Check")
+    println(deltaVec)
 
     # now find the gains from trade
     uVec =[]
@@ -122,6 +126,7 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
             # get probability threshold for current price
             threshold=(mxPrice-offerPrice)/(mxPrice-fairPrice)
             Beta1=Beta(1+agt1.betaParam,1)
+            #println(threshold)
             pThres=quantile(Beta1,threshold)
             if rand(U,1)[1] >= pThres
                 return true
@@ -157,10 +162,50 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     end
     # now, find a trade
     pIndex=sample(1:length(prices),length(prices),replace=false)
+    retVal::Bool=false
+    for currPrice in pIndex
+        if acceptFunc1(currPrice) && acceptFunc2(currPrice)
+            println(agt1.alloc)
+            println(agt2.alloc)
+            println(deltaVec)
+            agt1.alloc=agt1.alloc+deltaVec
+            agt2.alloc=agt2.alloc-deltaVec
+            println(agt1.alloc)
+            println(agt2.alloc)
+            push!(agt1.priceHistory[tradePair],currPrice)
+            push!(agt2.priceHistory[tradePair],currPrice)
+            retVal=true
+            break
+        end
+    end
+    return retVal
 
 end
 
+# now, we have a round function that loops until there have been no gains from trade in 30 steos
 
+function tradeRound()
+    ticker::Int64=0
+    while ticker < 30
+        # randomly select two agents 
+        agtVec=sample(agtList,2,replace=false)
+        # randomly select two goods
+        goodsVec=Tuple(sort!(sample(collect(1:goodNum),2,replace=false)))
+        if agtEval(agtVec[1],agtVec[2],goodsVec)
+            ticker=0
+        else
+            ticker=ticker+1
+        end
+    end
+end
+
+for agt in agtList
+    println(agt.alloc)
+end
+tradeRound()
+for agt in agtList
+    println(agt.alloc)
+end
 # now, initially, agents are minimally intelligent
 # agents accept the trade with probability 1 if it is mutually advantageous
 # over time, agents keep track of trade prices and take an average price for each pair of commodities
