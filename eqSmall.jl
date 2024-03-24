@@ -76,8 +76,8 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # now, simulate the possible trades
     deltaVec[:,agtOffer1]=-rand(U,10000).*agt1.alloc[agtOffer1]
     deltaVec[:,agtOffer2]=+rand(U,10000).*agt2.alloc[agtOffer2]
-    println("Delta Check")
-    println(deltaVec)
+    #println("Delta Check")
+    #println(deltaVec)
 
     # now find the gains from trade
     uVec =[]
@@ -86,6 +86,8 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # note, agent one gets what's in the left column and gives what is in the right
     # this means that agt one prefers lower prices
     # and agent two prefers higher
+    println("Debug")
+    println(agt1.alloc)
     gains1=mapslices(uVec[1],transpose(agt1.alloc).+deltaVec,dims=2)
     gains2=mapslices(uVec[2],transpose(agt2.alloc).-deltaVec,dims=2)
     
@@ -124,18 +126,18 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
             return true
         else
             # get probability threshold for current price
-            println("Debug")
-            println(mxPrice)
-            println(mnPrice)
-            println(offerPrice)
-            println(fairPrice)
+            #println("Debug")
+            #println(mxPrice)
+            #println(mnPrice)
+            #println(offerPrice)
+            #println(fairPrice)
             
             threshold=(mxPrice-offerPrice)/(mxPrice-fairPrice)
-            println("param")
-            println(agt1.betaParam)
+            #println("param")
+            #println(agt1.betaParam)
             Beta1=Beta(1+agt1.betaParam,1)
-            println("threshold")
-            println(threshold)
+            #println("threshold")
+            #println(threshold)
             pThres=quantile(Beta1,threshold)
             if rand(U,1)[1] >= pThres
                 return true
@@ -172,13 +174,16 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
     # now, find a trade
     pIndex=sample(1:length(prices),length(prices),replace=false)
     retVal::Bool=false
-    for currPrice in pIndex
+    for idx in pIndex
+        currPrice=prices[idx]
         if acceptFunc1(currPrice) && acceptFunc2(currPrice)
+            println("Chk")
             println(agt1.alloc)
             println(agt2.alloc)
-            println(deltaVec)
-            agt1.alloc=agt1.alloc+deltaVec
-            agt2.alloc=agt2.alloc-deltaVec
+            println(size(deltaVec))
+            println(deltaVec[idx,:])
+            agt1.alloc=agt1.alloc.+deltaVec[idx]
+            agt2.alloc=agt2.alloc.-deltaVec[idx]
             println(agt1.alloc)
             println(agt2.alloc)
             push!(agt1.priceHistory[tradePair],currPrice)
