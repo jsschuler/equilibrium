@@ -124,9 +124,18 @@ function agtEval(agt1::agent,agt2::agent,tradePair::Tuple)
             return true
         else
             # get probability threshold for current price
+            println("Debug")
+            println(mxPrice)
+            println(mnPrice)
+            println(offerPrice)
+            println(fairPrice)
+            
             threshold=(mxPrice-offerPrice)/(mxPrice-fairPrice)
+            println("param")
+            println(agt1.betaParam)
             Beta1=Beta(1+agt1.betaParam,1)
-            #println(threshold)
+            println("threshold")
+            println(threshold)
             pThres=quantile(Beta1,threshold)
             if rand(U,1)[1] >= pThres
                 return true
